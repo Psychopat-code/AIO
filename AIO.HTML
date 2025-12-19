@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart To-Do + Internal Tools Dashboard</title>
+<style>
+:root{
+  --bg:#eef2f6; --card:#fff; --text:#222; --muted:#666;
+  --primary:#2e8b57; --urgent:#ffb3b3; --wip:#fff7b3; --personal:#d0e7ff; --onhold:#e0e0e0;
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:Inter,sans-serif;background:var(--bg);color:var(--text);display:flex;justify-content:center;padding:12px;}
+button{cursor:pointer;border:none;background:black;font-family:inherit;color: whitesmoke}
+.container{display:flex;gap:24px;max-width:1200px;width:100%;justify-content:center;flex-wrap:wrap;height: 100vh;align-items: stretch;}
+.left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 320px;
+  height: 100%; /* fill container height */
+}
+/* Make right panel take full available width */
+.right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 320px;
+  max-width: none; /* remove any width restriction */
+  height: 100vh;
+  overflow-y: auto;       /* scroll if content overflows */
+  padding-right: 12px;    /* optional: small padding for scrollbar */
+}
+
+.left, .right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 320px;
+  height: 100%; /* fill parent height */
+}
+
+
+/* Make grid inside each card 2 columns */
+.grid-card .grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr); /* 2 columns */
+  gap: 10px;
+}
+
+/* Keep boxes full width of the grid column */
+.grid-card .box {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+  border-radius: 15px;
+  font-size: 14px;
+  background: transparent;
+  color: #fff;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.3s ease, box-shadow 0.2s ease;
+}
+
+.grid-card .box:hover {
+  background: #fff;
+  color: #000;
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+/* Optional badge style */
+.badge {
+  background: #ff3b30;
+  color: #fff;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.app{background:var(--card);border-radius:12px;display:flex;flex-direction:column;flex:1;}
+.header{display:flex;justify-content:space-between;align-items:center;padding:16px;border-bottom:1px solid rgba(0,0,0,0.04);}
+.brand{display:flex;gap:12px;align-items:center;}
+.logo{width:44px;height:44px;border-radius:10px;background:var(--primary);display:grid;place-items:center;color:#fff;font-weight:700;font-size:18px;}
+.tabs{display:flex;gap:8px;}
+.tab{padding:8px 14px;border-radius:10px;cursor:pointer;color:#fff;background:#000;}
+.tab.active{background:var(--primary);}
+.main{display:grid;grid-template-columns:1fr;gap:18px;padding:18px;}
+.view{background:var(--card);border-radius:10px;padding:12px;min-height:300px;}
+.side{display:flex;flex-direction:column;gap:12px;}
+.card{background:var(--card);border-radius:10px;padding:12px;}
+form.add{display:flex;flex-direction:column;gap:8px;}
+.row{display:flex;gap:8px;}
+input,select,textarea{padding:10px;border-radius:8px;border:1px solid rgba(0,0,0,0.08);font-size:16px;background:transparent;color:var(--text);}
+input.small,select.small{flex:0 0 120px;}
+.add-actions{display:flex;gap:8px;align-items:center;}
+.task{display:flex;flex-direction:column;padding:10px;border-radius:8px;margin-bottom:6px;transition:all 0.2s ease;position:relative;}
+.task:hover{transform:scale(1.02);box-shadow:0 3px 6px rgba(0,0,0,0.1);}
+.task.completed {
+  background-color: #d4edda !important; /* light green highlight */
+  text-decoration: line-through;
+  opacity: 0.8;
+}
+.task.completed .title{text-decoration:line-through;opacity:0.7;}
+.task span.title{cursor:pointer;font-weight:bold;}
+.task select {
+  width: auto;           /* fits content */
+  display: inline-block; /* shrink to content width */
+  font-size: 14px;
+  margin-top: 4px;       /* small spacing from task text */
+}
+.noteArea {
+  width: 100%;
+  padding: 6px;
+  font-size: 14px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  resize: none;
+  overflow: hidden;
+  min-height: 50px;
+  box-sizing: border-box;
+  transition: height 0.15s ease;
+}
+
+/* Priority colors */
+.task.cat-urgent { background-color: var(--urgent); }
+.task.cat-wip { background-color: var(--wip); }
+.task.cat-personal { background-color: var(--personal); }
+.task.cat-onhold { background-color: var(--onhold); }
+
+/* Delete button */
+.task .deleteBtn {
+  cursor: pointer;
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  font-size: 16px;
+}
+
+.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+.calendar-day{padding:8px;text-align:center;border-radius:6px;cursor:pointer;}
+.calendar-day.today{border:2px solid var(--primary);font-weight:bold;}
+.calendar-day.active{background:var(--primary);color:#fff;font-weight:700;}
+.tools-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+  flex: 1; /* fill the right panel */
+}
+.grid-card{background:darkslategrey;border:1px solid rgba(255,255,255,0.08);padding:16px;border-radius:20px;color:#fff;display:flex;flex-direction:column;gap:12px;}
+.grid-card h1{text-align:center;}
+.grid{display:grid;grid-template-columns:1fr;gap:10px;overflow-x:hidden;}
+.box{width:100%;min-height:40px;display:flex;align-items:center;justify-content:center;border:2px solid #fff;border-radius:15px;font-size:14px;background:transparent;color:#fff;text-decoration:none;cursor:pointer;transition:all 0.3s ease;}
+.box:hover{background:lightcyan;color:#000;transform:translateY(-2px) scale(1.03);}
+#confetti{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;}
+.color-guide{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}
+.color-box{display:flex;align-items:center;gap:4px;}
+.color-sample{width:20px;height:20px;border-radius:4px;}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="left">
+    <div class="app">
+      <div class="header">
+        <div class="brand">
+          <div class="logo">TD</div>
+          <div>
+            <h1>Smart To-Do 2025+ (PHT)</h1>
+            <div style="font-size:12px;color:var(--muted)">Tasks carry over at 11AM PHT if not completed</div>
+          </div>
+        </div>
+        <div class="tabs">
+          <button class="tab active" data-view="dayView">Day View</button>
+          <button class="tab" data-view="calendarView">Calendar</button>
+        </div>
+      </div>
+
+      <div class="main">
+        <div class="view">
+          <section id="dayView" class="activeView">
+            <h3>Tasks on <span id="selectedDateDisplay"></span></h3>
+            <div id="dayTasksList" style="display:flex;flex-direction:column;gap:8px"></div>
+            <div id="noTasksDay" style="margin-top:12px;color:var(--muted)">No tasks for this day.</div>
+
+            <!-- Color guide -->
+            <div class="color-guide">
+              <div class="color-box"><div class="color-sample" style="background:var(--urgent)"></div>Urgent</div>
+              <div class="color-box"><div class="color-sample" style="background:var(--wip)"></div>WIP</div>
+              <div class="color-box"><div class="color-sample" style="background:var(--personal)"></div>Personal</div>
+              <div class="color-box"><div class="color-sample" style="background:var(--onhold)"></div>OnHold</div>
+            </div>
+          </section>
+
+          <section id="calendarView" style="display:none;">
+            <div id="calendarGrid" class="calendar-grid"></div>
+          </section>
+        </div>
+
+        <aside class="side">
+          <div class="card">
+            <form class="add" id="addForm">
+              <input id="taskText" type="text" placeholder="Task description" required/>
+              <div class="row">
+                <input id="taskDate" type="date" class="small" required/>
+                <select id="taskCategory" class="small">
+                  <option value="urgent">Urgent</option>
+                  <option value="wip">WIP</option>
+                  <option value="personal">Personal</option>
+                  <option value="onhold">OnHold</option>
+                </select>
+              </div>
+              <textarea id="taskNote" placeholder="Optional note" style="height:50px;min-height:50px;"></textarea>
+              <div class="add-actions">
+                <button type="submit">Add task</button>
+              </div>
+            </form>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="tools-body">
+      <div class="grid-card">
+        <h1>CMS Tools</h1>
+        <div class="grid">
+          <a href="https://matrix.curaytor.com/" target="_blank" class="box">Matrix</a>
+          <a href="https://supportportal.curaytor.com/internal-login" target="_blank" class="box">Internal Login</a>
+          <a href="https://curaytor.formstack.com/forms/internal_downgrade_form" target="_blank" class="box">Churn/Cancellation Request</a>
+          <a href="https://dash.cloudflare.com/" target="_blank" class="box">Cloudflare</a>
+        </div>
+      </div>
+      <div class="grid-card">
+        <h1>Email Tools</h1>
+        <div class="grid">
+          <a href="https://login.sendgrid.com/login/identifier" target="_blank" class="box">SendGrid</a>
+          <a href="https://matrix.curaytor.com/blast/segments" target="_blank" class="box">Exporting leads on Segments</a>
+          <a href="https://mxtoolbox.com/" target="_blank" class="box">MX Toolbox</a>
+        </div>
+      </div>
+      <div class="grid-card">
+        <h1>Lofty/FUB Admin</h1>
+        <div class="grid">
+          <a href="https://curaytor.lofty.com/login.html" target="_blank" class="box">Lofty Admin</a>
+          <a href="https://help.lofty.com/hc/en-us/articles/26697006829595" target="_blank" class="box">Lofty AMP Issues</a>
+          <a href="https://app.followupboss.com/partners/login" target="_blank" class="box">FUB Admin</a>
+        </div>
+      </div>
+      <div class="grid-card">
+        <h1>CRM Sync</h1>
+        <div class="grid">
+          <a href="https://matrix.curaytor.com/crm/fub/sync" target="_blank" rel="noopener noreferrer" class="box">FUB Sync</a>
+          <a href="https://matrix.curaytor.com/crm/chime/agents" target="_blank" rel="noopener noreferrer" class="box">Sync Chime Agents</a>
+        </div>
+      </div>
+      <div class="grid-card">
+        <h1>Marketing/Content Services Flag</h1>
+        <div class="grid">
+          <a href="https://curaytor.retool.com/apps/c0e541be-8650-11ef-8d8e-23415d56fc16/Active%20Ops%20Tools/Curaytor%20Custom%20Content%20Services%20Flag" target="_blank" rel="noopener noreferrer" class="box">Custom Content - Pro</a>
+          <a href="https://curaytor.retool.com/apps/91fbc608-95e6-11ee-8c04-a7e41698d850/Active%20Ops%20Tools/Curaytor%20Marketing%20Services%20Flag" target="_blank" rel="noopener noreferrer" class="box">Core Marketing - Core</a>
+          <a href="https://curaytor.retool.com/apps/c1ac82d4-73d6-11ee-9126-efa7615b200a/Dev/JimmyDrops%20Onboarding" target="_blank" rel="noopener noreferrer" class="box">C-Drops</a>
+          <a href="https://curaytor-cast.monday.com/boards/3227915700" target="_blank" rel="noopener noreferrer" class="box">Listing Promotions</a>
+        </div>
+      </div>
+      <div class="grid-card">
+        <h1>Personal</h1>
+        <div class="grid">
+          <a href="https://app.hubspot.com/" target="_blank" rel="noopener noreferrer" class="box">Hubspot</a>
+          <a href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener noreferrer" class="box">Google Mail</a>
+          <a href="https://drive.google.com/drive/folders/19QXbtkPJCKGyAMNUukENfSobyo2dEkRp" target="_blank" rel="noopener noreferrer" class="box">2025 SOP and Resources</a>
+          <a href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer" class="box">ChatGPT</a>
+          <a href="https://docs.google.com/spreadsheets/d/1D46xuNhUImKEmuRLgU0fJNRbprQJ0KV7xpONupLrztc" target="_blank" rel="noopener noreferrer" class="box">Waiting for Dev Tickets</a>
+          <a href="https://docs.google.com/spreadsheets/d/1KW0RkK_3oViUrjQPPW9-Af4S3OFFD0QD60CYK7-_KDA" target="_blank" rel="noopener noreferrer" class="box">Client GA Accounts</a>
+          <a href="https://help.curaytor.com/knowledge" target="_blank" rel="noopener noreferrer" class="box">Curaytor Help Center - V1</a>
+          <a href="https://v2-help.curaytor.com/v2-help/" target="_blank" rel="noopener noreferrer" class="box">Curaytor Help Center - V2</a>
+          <a href="https://www.notion.so/curaytorllc/13b3c6e9c5c58085987dc85caa08f30d?v=86e1ecc637cf48efb43308efd9c7153c" target="_blank" rel="noopener noreferrer" class="box">CS Knowledge Base</a>
+          <a href="https://docs.curaytor.dev/notes/" target="_blank" rel="noopener noreferrer" class="box">Dev Notes</a>
+        </div>
+      </div>
+      <div class="grid-card">
+        <h1>Fourwalls</h1>
+        <div class="grid">
+          <a href="https://fourwallsdigital.freshdesk.com/a/tickets/filters/search?orderBy=created_at&orderType=desc&perPage=100&q[]=group%3Fis_in%3A%5B14000104117%5D&q[]=status%3Fis_in%3A%5B2%2C3%5D&ref=_created" target="_blank" rel="noopener noreferrer" class="box">FreshDesk</a>
+          <a href="https://app.chargebee.com/login?forward=https://fourwalls.chargebee.com" target="_blank" rel="noopener noreferrer" class="box">Chargebee</a>
+          <a href="http://fwd-image-retriever.azurewebsites.net/swagger/ui/index#!/Values/Values_UpdateImages" target="_blank" rel="noopener noreferrer" class="box">Image Retriever</a>
+          <a href="https://fourwallsdigitalcorp.sharepoint.com/SitePages/Home.aspx" target="_blank" rel="noopener noreferrer" class="box">Fourwalls Sharepoint</a>
+        </div>
+      </div>
+      <div class="grid-card">
+        <h1>DAGS</h1>
+        <div class="grid">
+          <a href="http://127.0.0.1:5500/Tools/DAGS%20SOP.html" target="_blank" rel="noopener noreferrer" class="box">DAGS SOP</a>
+          <a href="https://airflow.curaytor.io/dags/lead/grid" target="_blank" rel="noopener noreferrer" class="box">V1 Lead Flow</a>
+          <a href="https://airflow.curaytor.io/dags/youtube_stats/grid" target="_blank" rel="noopener noreferrer" class="box">Youtube Integration</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<canvas id="confetti"></canvas>
+
+<script>
+const LS_KEY = 'todo2025carry';
+let tasks = JSON.parse(localStorage.getItem(LS_KEY)||'[]');
+
+let today = new Date().toISOString().slice(0,10);
+
+// Carry over incomplete tasks to today and mark urgent
+tasks.forEach(t => {
+  if (!t.done && t.date < today) {
+    t.date = today;
+    t.category = 'urgent';
+  }
+});
+localStorage.setItem(LS_KEY, JSON.stringify(tasks));
+
+let selectedDate = today;
+
+const dayTasksList = document.getElementById('dayTasksList');
+const selectedDateDisplay = document.getElementById('selectedDateDisplay');
+const noTasksDay = document.getElementById('noTasksDay');
+const taskText = document.getElementById('taskText');
+const taskDate = document.getElementById('taskDate');
+const taskCategory = document.getElementById('taskCategory');
+const taskNote = document.getElementById('taskNote');
+const addForm = document.getElementById('addForm');
+taskDate.value = selectedDate;
+selectedDateDisplay.textContent = selectedDate;
+selectedDateDisplay.style.cursor='pointer';
+selectedDateDisplay.title='Click to change date';
+selectedDateDisplay.addEventListener('click',()=>{ 
+  const newDate = prompt('Enter date YYYY-MM-DD', selectedDate); 
+  if(newDate){ 
+    selectedDate = newDate; 
+    taskDate.value = newDate; 
+    renderDayView(); 
+  }
+});
+
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{ 
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); 
+    tab.classList.add('active'); 
+    if(tab.dataset.view==='dayView'){ 
+      document.getElementById('dayView').style.display='block'; 
+      document.getElementById('calendarView').style.display='none'; 
+    } else { 
+      document.getElementById('dayView').style.display='none'; 
+      document.getElementById('calendarView').style.display='grid'; 
+      renderCalendar(); 
+    } 
+  });
+});
+
+addForm.addEventListener('submit', e=>{
+  e.preventDefault();
+  tasks.push({id:Math.random().toString(36).slice(2,9),title:taskText.value,date:taskDate.value,category:taskCategory.value,note:taskNote.value,done:false});
+  taskText.value=''; taskNote.value='';
+  localStorage.setItem(LS_KEY, JSON.stringify(tasks));
+  renderDayView();
+});
+
+// Confetti setup
+const confettiCanvas = document.getElementById('confetti');
+const confettiCtx = confettiCanvas.getContext('2d');
+let confettiParticles = [];
+
+function launchConfetti() {
+  confettiCanvas.width = window.innerWidth;
+  confettiCanvas.height = window.innerHeight;
+  confettiParticles = [];
+  for (let i = 0; i < 100; i++) {
+    confettiParticles.push({
+      x: Math.random()*window.innerWidth,
+      y: Math.random()*window.innerHeight - window.innerHeight,
+      r: Math.random()*6 + 4,
+      d: Math.random()*50 + 50,
+      color: `hsl(${Math.random()*360}, 100%, 50%)`,
+      tilt: Math.random()*10 - 10,
+      tiltAngleIncrement: Math.random()*0.07 + 0.05,
+      tiltAngle: 0
+    });
+  }
+  requestAnimationFrame(drawConfetti);
+}
+
+function drawConfetti() {
+  confettiCtx.clearRect(0,0,confettiCanvas.width, confettiCanvas.height);
+  confettiParticles.forEach(p=>{
+    p.tiltAngle += p.tiltAngleIncrement;
+    p.y += (Math.cos(p.d) + 3 + p.r/2)/2;
+    p.tilt = Math.sin(p.tiltAngle) * 15;
+    confettiCtx.beginPath();
+    confettiCtx.lineWidth = p.r/2;
+    confettiCtx.strokeStyle = p.color;
+    confettiCtx.moveTo(p.x + p.tilt + p.r/4, p.y);
+    confettiCtx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r/4);
+    confettiCtx.stroke();
+  });
+  confettiParticles = confettiParticles.filter(p => p.y < window.innerHeight + 20);
+  if(confettiParticles.length > 0) requestAnimationFrame(drawConfetti);
+}
+
+function renderDayView(){
+  selectedDateDisplay.textContent = selectedDate;
+  let dayTasks = tasks.filter(t => t.date === selectedDate);
+  const order = {'urgent':1,'wip':2,'onhold':3,'personal':4};
+  dayTasks.sort((a,b) => order[a.category] - order[b.category]);
+  dayTasks.sort((a, b) => {
+  if(a.done && !b.done) return 1;   // completed goes after incomplete
+  if(!a.done && b.done) return -1;  // incomplete comes first
+  return order[a.category] - order[b.category]; // then sort by priority
+});
+  dayTasksList.innerHTML = '';
+  
+  if(dayTasks.length === 0){
+    noTasksDay.style.display = 'block';
+  } else {
+    noTasksDay.style.display = 'none';
+  }
+  
+  dayTasks.forEach(t => {
+    const div = document.createElement('div'); 
+    div.className = 'task cat-'+t.category+(t.done?' completed':'');
+
+    const titleSpan = document.createElement('span'); 
+    titleSpan.textContent = t.title; 
+    titleSpan.className = 'title';
+    titleSpan.addEventListener('click', () => {
+      t.done = !t.done; 
+      localStorage.setItem(LS_KEY, JSON.stringify(tasks)); 
+      renderDayView();
+      if(t.done) launchConfetti(); // Confetti on completion
+    });
+    div.appendChild(titleSpan);
+
+    const note = document.createElement('textarea');
+    note.className = 'noteArea';
+    note.value = t.note || '';
+    note.style.height = note.scrollHeight + 'px';
+    note.style.overflow = 'hidden';
+    note.style.resize = 'none';
+    note.style.minHeight = '50px';
+    div.appendChild(note);
+
+    note.addEventListener('input', () => {
+      note.style.height = 'auto';
+      note.style.height = note.scrollHeight + 'px';
+      t.note = note.value;
+      localStorage.setItem(LS_KEY, JSON.stringify(tasks));
+    });
+
+const categorySelect = document.createElement('select');
+categorySelect.innerHTML = `
+  <option value="urgent">Urgent</option>
+  <option value="wip">WIP</option>
+  <option value="personal">Personal</option>
+  <option value="onhold">OnHold</option>
+`;
+categorySelect.value = t.category;
+categorySelect.addEventListener('change', () => {
+  t.category = categorySelect.value;
+  localStorage.setItem(LS_KEY, JSON.stringify(tasks));
+  renderDayView(); // update color and layout
+});
+div.appendChild(categorySelect);
+
+    const delBtn = document.createElement('span'); 
+    delBtn.innerHTML = '🗑️'; 
+    delBtn.className = 'deleteBtn'; 
+    delBtn.addEventListener('click', (e) => { 
+      e.stopPropagation(); // prevents toggling done
+      tasks = tasks.filter(x => x.id !== t.id); 
+      localStorage.setItem(LS_KEY, JSON.stringify(tasks)); 
+      renderDayView(); 
+    });
+    div.appendChild(delBtn);
+
+    dayTasksList.appendChild(div);
+  });
+}
+
+function renderCalendar(){
+  const grid=document.getElementById('calendarGrid'); grid.innerHTML='';
+  const [y,m]=selectedDate.split('-').map(Number);
+  const firstDay=new Date(y,m-1,1).getDay();
+  const daysInMonth=new Date(y,m,0).getDate();
+  for(let i=0;i<firstDay;i++){ grid.appendChild(document.createElement('div')); }
+  for(let d=1;d<=daysInMonth;d++){
+    const div=document.createElement('div'); div.textContent=d; div.className='calendar-day';
+    const dayStr=`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    if(dayStr===today) div.classList.add('today');
+    div.addEventListener('click',()=>{ selectedDate=dayStr; document.querySelector('[data-view="dayView"]').click(); renderDayView(); });
+    grid.appendChild(div);
+  }
+}
+
+document.querySelectorAll('.grid-card h1').forEach(h => {
+  h.addEventListener('click', () => {
+    const grid = h.nextElementSibling;
+    grid.style.display = grid.style.display === 'none' ? 'grid' : 'none';
+  });
+});
+
+renderDayView();
+</script>
+</body>
+</html>
